@@ -1,34 +1,47 @@
 import pyaudio
-import numpy as np
-import openwakeword
-from openwakeword.model import Model
+import webrtcvad
+import collections
 from audio_device import find_device_index
 
-oww_model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
-
-CHUNK = 1280  # openWakeWord expects 80ms chunks at 16kHz
+RATE = 16000
+FRAME_MS = 30  # webrtcvad supports 10, 20, or 30ms frames
+FRAME_SIZE = int(RATE * FRAME_MS / 1000)
+AGGRESSIVENESS = 2  # 0-3, higher = more aggressive filtering
+SPEECH_FRAMES_TRIGGER = 5   # frames of speech before activating
+SILENCE_FRAMES_TIMEOUT = 30  # frames of silence before giving up
 
 def listen_for_wake_word():
+    vad = webrtcvad.Vad(AGGRESSIVENESS)
     audio = pyaudio.PyAudio()
     device_index = find_device_index()
 
     stream = audio.open(
         format=pyaudio.paInt16,
         channels=1,
-        rate=16000,
+        rate=RATE,
         input=True,
         input_device_index=device_index,
-        frames_per_buffer=CHUNK
+        frames_per_buffer=FRAME_SIZE
     )
 
-    print("🎤 Listening for wake word 'hey jarvis'...")
+    print("🎤 Listening for speech...")
+    ring_buffer = collections.deque(maxlen=SPEECH_FRAMES_TRIGGER)
+    silence_count = 0
+
     try:
         while True:
-            pcm = np.frombuffer(stream.read(CHUNK, exception_on_overflow=False), dtype=np.int16)
-            prediction = oww_model.predict(pcm)
-            if prediction.get("hey_jarvis", 0) > 0.5:
-                print("🗣️ Wake word detected!")
+            frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
+            is_speech = vad.is_speech(frame, RATE)
+            ring_buffer.append(is_speech)
+
+            if sum(ring_buffer) >= SPEECH_FRAMES_TRIGGER:
+                print("🗣️ Speech detected!")
                 break
+
+            if is_speech:
+                silence_count = 0
+            else:
+                silence_count += 1
     finally:
         stream.stop_stream()
         stream.close()
