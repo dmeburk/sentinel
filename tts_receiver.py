@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import tempfile
 import os
 import subprocess
+from sentinel_config import SENTINEL_NAME, MQTT_BROKER, MQTT_PORT
 
 
 def on_message(client, userdata, msg):
@@ -16,7 +17,7 @@ def on_message(client, userdata, msg):
 
 client = mqtt.Client()
 client.on_message = on_message
-client.connect("192.168.0.119", 1883)
-client.subscribe("voice/sentinel-rafa/tts")
-print("📡 Listening for TTS messages...")
+client.connect(MQTT_BROKER, MQTT_PORT)
+client.subscribe(f"voice/{SENTINEL_NAME}/tts")
+print(f"📡 Listening for TTS messages on voice/{SENTINEL_NAME}/tts...")
 client.loop_forever()
