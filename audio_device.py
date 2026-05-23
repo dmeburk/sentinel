@@ -1,11 +1,12 @@
-# audio_device.py
-
-from pvrecorder import PvRecorder
+import pyaudio
 from sentinel_config import MICROPHONE_NAME
 
 def find_device_index():
-    devices = PvRecorder.get_available_devices()
-    for i, name in enumerate(devices):
-        if MICROPHONE_NAME in name:
+    audio = pyaudio.PyAudio()
+    for i in range(audio.get_device_count()):
+        info = audio.get_device_info_by_index(i)
+        if info["maxInputChannels"] > 0 and MICROPHONE_NAME in info["name"]:
+            audio.terminate()
             return i
-    raise RuntimeError(f"Microphone '{MICROPHONE_NAME}' not found in available devices: {devices}")
+    audio.terminate()
+    raise RuntimeError(f"Microphone '{MICROPHONE_NAME}' not found")

@@ -1,28 +1,38 @@
-import pvporcupine
-from pvrecorder import PvRecorder
+import pyaudio
+import numpy as np
+import openwakeword
+from openwakeword.model import Model
 from audio_device import find_device_index
 
-def listen_for_wake_word(keyword="porcupine"):
-    porcupine = pvporcupine.create(
-        access_key="jY9OXpqEumzSPY+xsSW8h+v+kp3bsjiGx99+UN4HKa48OU82D8eUXw==",
-        keywords=[keyword]
+oww_model = Model(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+
+CHUNK = 1280  # openWakeWord expects 80ms chunks at 16kHz
+
+def listen_for_wake_word():
+    audio = pyaudio.PyAudio()
+    device_index = find_device_index()
+
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=16000,
+        input=True,
+        input_device_index=device_index,
+        frames_per_buffer=CHUNK
     )
 
-    device_index = find_device_index()
-    recorder = PvRecorder(device_index=device_index, frame_length=porcupine.frame_length)
-
+    print("🎤 Listening for wake word 'hey jarvis'...")
     try:
-        recorder.start()
-        print(f"🎤 Listening for wake word '{keyword}' on device {device_index}...")
         while True:
-            pcm = recorder.read()
-            if porcupine.process(pcm) >= 0:
-                print(f"🗣️ Wake word '{keyword}' detected!")
+            pcm = np.frombuffer(stream.read(CHUNK, exception_on_overflow=False), dtype=np.int16)
+            prediction = oww_model.predict(pcm)
+            if prediction.get("hey_jarvis", 0) > 0.5:
+                print("🗣️ Wake word detected!")
                 break
     finally:
-        recorder.stop()
-        porcupine.delete()
-        recorder.delete()
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
 
 if __name__ == "__main__":
     listen_for_wake_word()
